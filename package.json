@@ -1,0 +1,16 @@
+{
+  "name": "rhizomatic",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "squint-cljs": "^0.8.141",
+    "vite": "^6.2.2"
+  }
+}
