@@ -7,7 +7,7 @@ var set_text_info_BANG_ = function () {
 const ctx1 = gs.game_state.context;
 ctx1.textAlign = "start";
 ctx1.textBaseline = "top";
-ctx1.font = "15px serif";
+ctx1.font = "18px serif";
 return ctx1.fillStyle = "black";
 
 };
@@ -23,12 +23,12 @@ const width7 = (2) + (word_width(measurement6));
 const potential_next_width8 = (width7) + (data1.workinglen);
 if ((potential_next_width8) > (gs.game_state.textwidth)) {
 data1.linenum = (data1.linenum + 1);
-data1.drawdata.words.push(({ "word": word5, "xpos": 0, "ypos": (lineheight2) * (data1.linenum) }));
+data1.drawdata.words.push(({ "word": word5, "xpos": 0, "ypos": (lineheight2) * (data1.linenum), "width": width7, "height": 20 }));
 data1.drawdata.height = (lineheight2) * ((data1.linenum + 1));
 data1.drawdata.width = (((data1.drawdata.width) > (data1.workinglen)) ? (data1.drawdata.width) : (data1.workinglen));
 data1.workinglen = width7;
 } else {
-data1.drawdata.words.push(({ "word": word5, "xpos": data1.workinglen, "ypos": (lineheight2) * (data1.linenum) }));
+data1.drawdata.words.push(({ "word": word5, "xpos": data1.workinglen, "ypos": (lineheight2) * (data1.linenum), "width": width7, "height": 20 }));
 data1.workinglen = potential_next_width8;
 }
 };

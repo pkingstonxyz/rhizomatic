@@ -1,7 +1,6 @@
 (ns texts
   (:require [gamestate :as gs]))
 
-
 (defn word-width [word-measurement]
   (+ (.-actualBoundingBoxLeft word-measurement)
      (.-actualBoundingBoxRight word-measurement)))
@@ -10,7 +9,7 @@
   (let [ctx (.-context gs/game-state)]
     (set! ctx.textAlign "start")
     (set! ctx.textBaseline "top")
-    (set! ctx.font "15px serif")
+    (set! ctx.font "18px serif")
     (set! ctx.fillStyle "black")))
     
 
@@ -33,7 +32,9 @@
             (.push (.-words (.-drawdata data))
                    {:word word
                     :xpos 0
-                    :ypos (* lineheight (.-linenum data))})
+                    :ypos (* lineheight (.-linenum data))
+                    :width width
+                    :height 20})
             (set! (.-height (.-drawdata data)) (* lineheight (inc (.-linenum data))))
             (set! (.-width (.-drawdata data))
                   (if (> (.-width (.-drawdata data)) (.-workinglen data))
@@ -44,7 +45,9 @@
             (.push (.-words (.-drawdata data)) 
                    {:word word
                     :xpos (.-workinglen data)
-                    :ypos (* lineheight (.-linenum data))}) 
+                    :ypos (* lineheight (.-linenum data))
+                    :width width
+                    :height 20}) 
             (set! (.-workinglen data) potential-next-width)))))
     ;adjust based on bounding box height and stuff
     (doseq [word (.-words (.-drawdata data))]

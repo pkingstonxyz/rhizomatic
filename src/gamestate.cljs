@@ -5,15 +5,22 @@
    :MAXTEXTWIDTH 400})
 
 (def game-state 
-  {:dt 0 ;time
+  {;time
+   :dt 0
    :lastUpdate 0
+   ;input
    :mousedown false
-   :mouseX 0 ;input
+   :mouseX 0 
    :mouseY 0
-   :cameraX 0
+   ;camera positioning
+   :cameraX 0 
    :cameraY 0 
-   :textwidth 400
-   :activeword "foo"
+   :targetnode 0
+   ;text rendering
+   :textwidth 400 
+   ;text state
+   :activeword nil 
    :texts []
    :strokes []
-   :targetnode 0})
+   ;markov
+   :transitiontable (js/Map.)})
