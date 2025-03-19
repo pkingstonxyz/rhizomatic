@@ -2,7 +2,8 @@
   (:require 
     [texts :as texts]
     [gamestate :as gs]
-    [kjv :as kjv]))
+    [kjv :as kjv]
+    [utils :as u]))
 
 (defn create-canvas! [id]
   (let [id-string (str "#canvas_" id)
@@ -36,36 +37,6 @@
     (.scale context ratio ratio)
     (texts/remeasure-text-nodes!)))
     
-
-(defn point-in-rect? 
-  "checks if the point px py 
-  is in rectangle x y w h" 
-  [px py x y w h]
-  (and (> px x)
-       (> py y)
-       (< px (+ x w))
-       (< py (+ y h))))
-
-(defn on-screen? [x y w h]
-  (let [bleft  x
-        btop   y
-        bright (+ x w)
-        bbot   (+ y h)]
-    (and (> bright 0)
-         (< bleft (.-innerWidth js/window))
-         (> bbot 0)
-         (< btop (.-innerHeight js/window))))) 
-
-(defn world->screen [x-or-y coord]
-  (if (= x-or-y :x)
-    (+ (/ (.-innerWidth js/window) 2) (- coord (.-cameraX gs/game-state)))
-    (+ (/ (.-innerHeight js/window) 2) (- coord (.-cameraY gs/game-state)))))
-
-(defn screen->world [x-or-y coord]
-  (if (= x-or-y :x)
-    (+ (.-cameraX gs/game-state) (- coord (/ (.-innerWidth js/window) 2)))
-    (+ (.-cameraY gs/game-state) (- coord (/ (.-innerHeight js/window) 2)))))
-
 (defn update-camera-pos! []
   (let [targX (:xpos (nth (:texts gs/game-state) (:targetnode gs/game-state)))
         targY (:ypos (nth (:texts gs/game-state) (:targetnode gs/game-state)))
@@ -104,24 +75,25 @@
     ;toggle active words
     (when (not (:mousedown gs/game-state))
       (set! (.-activeword gs/game-state) nil))
+    (set! ctx.globalAlpha 0.5)
     ;draw text nodes
     (doseq [[idx element] (map-indexed vector (:texts gs/game-state)) 
-            word    (.-words (.-drawdata element))]
+            [widx word]    (map-indexed vector (.-words (.-drawdata element)))]
       (if (not= (.-targetnode gs/game-state) idx)
-        (set! ctx.globalAlpha 0.5)
+        (set! ctx.globalAlpha 0.2)
         (set! ctx.globalAlpha 1))
       (let [wordx (.-xpos word)
             wordy (.-ypos word)
-            xpos (world->screen :x (+ (.-xpos element) wordx))
-            ypos (world->screen :y (+ (.-ypos element) wordy))]
-        (if (point-in-rect? (:mouseX gs/game-state) (:mouseY gs/game-state)
+            xpos (u/world->screen :x (+ (.-xpos element) wordx))
+            ypos (u/world->screen :y (+ (.-ypos element) wordy))]
+        (if (u/point-in-rect? (:mouseX gs/game-state) (:mouseY gs/game-state)
                             xpos ypos (.-width word) (.-height word))
           (when (not (:mousedown gs/game-state))
              (set! (.-targetnode gs/game-state) idx)
-             (set! (.-activeword gs/game-state) [idx word])
+             (set! (.-activeword gs/game-state) [idx widx])
              (set! ctx.fillStyle "red"))
           (set! ctx.fillStyle "black"))
-        (when (on-screen? xpos ypos (.-width word) (.-height word))
+        (when (u/on-screen? xpos ypos (.-width word) (.-height word))
           (.fillText ctx (:word word) xpos ypos))))
     ;draw current line
     (when (and (.-activeword gs/game-state) (.-mousedown gs/game-state))
@@ -130,15 +102,26 @@
       (.lineTo ctx (.-mouseX gs/game-state) (.-mouseY gs/game-state))
       (.stroke ctx))
     ;draw strokes. TODO: optimize for onscreen lol
+    (set! ctx.fillStyle "black")
+    (set! ctx.globalAlpha 0.2)
     (doseq [stroke (.-strokes gs/game-state)]
-      (let [sx (world->screen :x (.-sx stroke))
-            sy (world->screen :y (.-sy stroke))
-            ex (world->screen :x (.-ex stroke))
-            ey (world->screen :y (.-ey stroke))]
+      (let [sx (u/world->screen :x (.-sx stroke))
+            sy (u/world->screen :y (.-sy stroke))
+            ex (u/world->screen :x (.-ex stroke))
+            ey (u/world->screen :y (.-ey stroke))
+            string (.-string stroke)
+            angle (.atan2 js/Math (- ey sy) (- ex sx))]
+        ;draw line
         (.beginPath ctx)
         (.moveTo ctx sx sy) 
         (.lineTo ctx ex ey) 
-        (.stroke ctx)))
+        (.stroke ctx)
+        ;draw text
+        (.save ctx)
+        (.translate ctx sx sy)
+        (.rotate ctx angle)
+        (.fillText ctx string 0 0)
+        (.restore ctx)))
     (js/window.requestAnimationFrame main)))
 
 (defn markovfy-kjv! []
@@ -153,52 +136,54 @@
         (.set table word1 inner-map)))))
 
 (defn weighted-random-choice [weights]
-  (let [entries (js/Array.from (.entries weights))
-        total (reduce + (map second entries))]
-    (when (pos? total)
-      (let [r (* (.random js/Math) total)
-            data {:cumulative 0
-                  :index 0}]
-        (loop []
-          (if (>= (.-index data) (.-length entries))
-            nil
-            (let [[k v] (.at entries (.-index data))]
-              (if (>= (+ (.-cumulative data) v) r)
-                k
-                (do
-                  (set! (.-cumulative data) (+ (.-cumulative data) v))
-                  (set! (.-index data) (inc (.-index data)))
-                  (recur))))))))))
-
-
-#_(defn weighted-random-choice [weights]
+  (if weights
    (let [entries (js/Array.from (.entries weights))
-         total (reduce (fn [acc [k v]] (+ acc v)) 0 entries)]
-     (when (pos? total)
-       (let [r (* (.random js/Math) total)]
-         (loop [cumulative 0
-                remaining entries]
-           (if-let [[k v] (first remaining)]
-             (if (>= (+ cumulative v) r)
-               k
-               (recur (+ cumulative v) (rest remaining)))
-             ;; This should never be reached with valid input
-             nil))))))
+         total (reduce + (map second entries))]
+      (when (pos? total)
+        (let [r (* (.random js/Math) total)
+              data {:cumulative 0
+                    :index 0}]
+          (loop []
+            (if (>= (.-index data) (.-length entries))
+              nil
+              (let [[k v] (.at entries (.-index data))]
+                (if (>= (+ (.-cumulative data) v) r)
+                  k
+                  (do
+                    (set! (.-cumulative data) (+ (.-cumulative data) v))
+                    (set! (.-index data) (inc (.-index data)))
+                    (recur)))))))))
+   ". But"))
 
-#_(defn markov-chain [seed n]
+(defn markov-chain [seed dist]
+  (let [ctx (.-context gs/game-state)]
+    (println dist)
     (loop [output [seed]
-           current seed]
-      (if (< (count output) n)
-        (let [nextword (weighted-random-transition 
-                         (.get (.-transitiontable gs/game-state) current))]
-          (recur (conj nextword output)
-                 nextword))
-        (.join " " output))))
+           current seed
+           width (texts/word-width (.measureText ctx (.join output " ")))]
+      #_(println width)
+      (if (< width dist)
+         (let [nextword (weighted-random-choice 
+                          (.get (.-transitiontable gs/game-state) current))
+               nextarray (conj output nextword)
+               nextwidth (texts/word-width (.measureText ctx (.join nextarray " ")))]
+           (recur nextarray
+                  nextword
+                  nextwidth))
+         (.join output " ")))))
 
 (defn load-kjv! []
   (let [lines (.split kjv/kjv "\n")
         choice (rand-nth lines)]
     (markovfy-kjv!)
+    (doseq [[idx line] (map-indexed vector lines)
+            word (.split line #"\s")]
+      (let [table (.-wordindices gs/game-state)
+            lineset (if (.has table word)
+                      (.get table word)
+                      (js/Set.))]
+        (.add lineset idx)
+        (.set table word lineset)))
     (set! (.-lines gs/game-state) lines)
     (.push (.-texts gs/game-state) (texts/create-text-node choice 0 0))))
 
@@ -208,16 +193,32 @@
       (set! (.-strokestartY gs/game-state) (.-clientY e))))
 
 (defn end-stroke! [e]
-  (let [sxpos (screen->world :x (.-strokestartX gs/game-state))
-        sypos (screen->world :y (.-strokestartY gs/game-state))
-        expos (screen->world :x (.-clientX e))
-        eypos (screen->world :y (.-clientY e))]
-    (when (.-activeword gs/game-state)
-      (println (.get (.-transitiontable gs/game-state) (.-activeword gs/game-state)))
+  (let [sxpos (u/screen->world :x (.-strokestartX gs/game-state))
+        sypos (u/screen->world :y (.-strokestartY gs/game-state))
+        expos (u/screen->world :x (.-clientX e))
+        eypos (u/screen->world :y (.-clientY e))
+        active (.-activeword gs/game-state)]
+    (when active 
+      (let [[idx widx] active
+            wordobj (-> gs/game-state
+                         (.-texts)
+                         (nth idx)
+                         (.-drawdata)
+                         (.-words)
+                         (nth widx))
+            word (.-word wordobj)
+            dist (u/distance-between sxpos sypos expos eypos)
+            words (markov-chain word dist)
+            lastword (last (.split words #"\s"))
+            availlines (.get (.-wordindices gs/game-state) lastword)
+            lineidx (rand-nth (js/Array.from availlines))
+            nextline (nth (.-lines gs/game-state) lineidx)]
+        (.push (.-texts gs/game-state) (texts/create-text-node nextline expos eypos))
+        (.push (.-strokes gs/game-state) {:sx sxpos :sy sypos :ex expos :ey eypos :string words})
+        (set! (.-targetnode gs/game-state) (dec (count (.-texts gs/game-state))))))))
 
-      (println (weighted-random-choice 
-                 (.get (.-transitiontable gs/game-state) (.-activeword gs/game-state))))
-      (.push (.-strokes gs/game-state) {:sx sxpos :sy sypos :ex expos :ey eypos}))))
+(defn cancel-stroke! []
+  (set! (.-activeword gs/game-state) nil))
 
 (defn init []
   (let [canvas  (create-canvas! "canv")   ;create canvas
@@ -230,6 +231,7 @@
         (.append canvas))
     (.addEventListener js/window "resize" (partial resize-canvas! canvas context ratio) false)
     (.addEventListener canvas "mouseleave" (fn [_] 
+                                             (cancel-stroke!)
                                              (set! gs/game-state.mousedown false)))
     (.addEventListener canvas "mouseup" (fn [e]
                                           (end-stroke! e)

@@ -23,4 +23,6 @@
    :texts []
    :strokes []
    ;markov
-   :transitiontable (js/Map.)})
+   :transitiontable (js/Map.)
+   ;mapping of word->line#s
+   :wordindices (js/Map.)})
